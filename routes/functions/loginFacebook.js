@@ -1,8 +1,8 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const Screenshot = require("./model");
-const { cloudinary } = require("./cloudinary");
+const { FbUser } = require("../../models/FaceBookModel");
+const { cloudinary } = require("../../cloudinary");
 const {
   uploadScreenshot,
   scrollPage,
@@ -13,18 +13,20 @@ let browser, page;
 // let email = "9325774755";
 // let password = "dw@2004";
 async function extractInfo(email, password, onSuccess, data) {
-  
+  let caseNo = await FbUser.findOne({ case_no: data.case_no });
+  if (caseNo) {
+    onSuccess("Case number already registered", 500);
+    return "Case number already registered";
+  }
   try {
     browser = await puppeteer.launch({
       headless: false,
       defaultViewport: null,
-
     });
     page = await browser.newPage();
     await page.goto("https://www.facebook.com/login", {
       waitUntil: "networkidle2",
     });
-
     const isLoginPage = (await page.$("#email")) && (await page.$("#pass"));
 
     if (isLoginPage) {
@@ -36,7 +38,18 @@ async function extractInfo(email, password, onSuccess, data) {
         waitUntil: "networkidle2",
         timeout: 60000,
       });
-
+         const currentUrl = page.url();
+         if (
+           currentUrl.includes(
+             "login_attempt=1&lwv=100" ||
+               "device-based/regular"
+           )
+         ) {
+         
+           await browser.close();
+           onSuccess("Login failed due to network issue", 500);
+           return "Navigation failed";
+         }
       const loginFailed = await page.$("#email_container > div._9ay7");
 
       if (loginFailed) {
@@ -45,17 +58,21 @@ async function extractInfo(email, password, onSuccess, data) {
         onSuccess("Incorrect credentials", 500);
         return "Incorrect credentials";
       }
-      onSuccess("Login successful");
-      // Call extractUserInfo after successful login
-      await extractUserInfo(page);
+      
+      let newUser = new FbUser({ case_no: data.case_no, name: data.name });
+      await newUser.save();
+      onSuccess("Login successful !");
+      await extractUserInfo(page, data);
       await browser.close();
-      return "Login successful";
+      return "Login successful !";
     } else {
       console.log("Already logged in, skipping login.");
-      onSuccess("Already logged in");
-      await extractUserInfo(page);
+      let newUser = new FbUser({ case_no: data.case_no, name: data.name });
+      await newUser.save();
+      onSuccess("Already logged in !");
+      await extractUserInfo(page, data);
       await browser.close();
-      return "Already logged in";
+      return "Already logged in !";
     }
   } catch (error) {
     console.log(error.message);
@@ -64,55 +81,8 @@ async function extractInfo(email, password, onSuccess, data) {
   }
 }
 
-
-// async function extractInfo() {
-//   try {
-//     browser = await puppeteer.launch({
-//       headless: false,
-//       defaultViewport: null,
-
-//     });
-//     page = await browser.newPage();
-//     await page.goto("https://www.facebook.com/login", {
-//       waitUntil: "networkidle2",
-//     });
-
-//     const isLoginPage = (await page.$("#email")) && (await page.$("#pass"));
-
-//     if (isLoginPage) {
-//       // Perform login
-//       await page.type("#email", email);
-//       await page.type("#pass", password);
-//       await page.click('[name="login"]');
-//       await page.waitForNavigation({
-//         waitUntil: "networkidle2",
-//         timeout: 60000,
-//       });
-
-//       const loginFailed = await page.$("#email_container > div._9ay7");
-
-//       if (loginFailed) {
-//         console.log("Login failed. Incorrect credentials or other issue.");
-//         await browser.close();
-//         return "Incorrect credentials";
-//       }
-//       await extractUserInfo(page);
-//       await browser.close();
-//       return "Login successful";
-//     } else {
-//       console.log("Already logged in, skipping login.");
-//       await extractUserInfo(page);
-//       await browser.close();
-//       return "Already logged in";
-//     }
-//   } catch (error) {
-//     console.log(error.message);
-//     if (browser) await browser.close();
-//   }
-// }
-
-
-async function extractUserInfo(page) {
+async function extractUserInfo(page, data) {
+  let casenumber = data.case_no;
   try {
     console.log("Navigating to posts ");
     await page.goto("https://www.facebook.com/me/", {
@@ -183,23 +153,24 @@ async function extractUserInfo(page) {
             console.log(e.message);
           }
 
-          // Only increment postIndex after processing the current post
           for (let f of p) {
-            // Extract all the links (href attributes) from the element f and its children
             const links = await f.$$eval("a", (anchors) =>
               anchors.map((a) => a.href)
             );
 
-            // Define a function to check if a link is external
             function isExternalLink(link) {
               return (
                 !link.includes("www.facebook.com") || !link.includes("__cft__")
               );
-            }      
+            }
             const externalLinks = links.filter(isExternalLink);
             const screenshotPath = `screenshots/post_${postIndex}_${Date.now()}.png`;
             await f.screenshot({ path: screenshotPath });
-            const uploadResult = await uploadScreenshot(screenshotPath,externalLinks);
+            const uploadResult = await uploadScreenshot(
+              screenshotPath,
+              externalLinks,
+              casenumber
+            );
             console.log(`Uploaded post ${postIndex}:`, uploadResult);
           }
           postIndex++; // Increment after processing
@@ -250,7 +221,6 @@ async function extractUserInfo(page) {
 
   //   postIndex++; // Move to the next element
   // }
-
 }
 module.exports = { extractInfo };
 // extractInfo();

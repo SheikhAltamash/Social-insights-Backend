@@ -1,30 +1,47 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const Screenshot = require("./model");
-const { cloudinary } = require("./cloudinary");
-const uploadScreenshot = async (filePath,links) => {
+const { FbUser, Screenshots } = require("../../models/FaceBookModel");
+const { cloudinary } = require("../../cloudinary");
+const { notifyClients } = require("../facebookLogin");
+const { log } = require("console");
+const uploadScreenshot = async (filePath, links, casenumber) => {
   try {
-    console.log("sending")
+    console.log("sending");
     const result = await cloudinary.uploader.upload(filePath, {
       folder: "screenshots",
     });
-    console.log("Uploaded to Cloudinary:", result.secure_url);
-    await saveScreenshotToDB(result.secure_url,links);
+    console.log("Uploaded to Cloudinary");
+    const savedData = await saveScreenshotToDB(
+      result.secure_url,
+      links,
+      casenumber
+    );
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error(`Error deleting file ${filePath}:`, err);
+      } else {
+        console.log(`File ${filePath} deleted from server`);
+      }});
+    console.log(notifyClients);
+    notifyClients(savedData);
   } catch (error) {
     console.error("Error uploading to Cloudinary:", error);
   }
 };
-const saveScreenshotToDB = async (cloudinary_url, links) => {
+const saveScreenshotToDB = async (cloudinary_url, links, casenumber) => {
   const validLinks = links.filter((link) => link.trim() !== "");
   try {
-      const screenshot = new Screenshot({
+    let user = await FbUser.findOne({ case_no: casenumber });
+    let screenshot = new Screenshots({
       cloudinary_url: cloudinary_url,
-      links: validLinks, // Store only valid links
+      links: validLinks,
     });
-
     await screenshot.save();
+    user.post.push(screenshot);
+    await user.save();
     console.log("Screenshot URL saved to MongoDB");
+    return screenshot
   } catch (error) {
     console.error("Error saving screenshot to MongoDB:", error);
   }
@@ -38,7 +55,6 @@ async function scrollPage(page) {
       const timer = setInterval(() => {
         window.scrollBy(0, distance);
         totalHeight += distance;
-
         if (totalHeight >= document.body.scrollHeight) {
           clearInterval(timer);
           resolve();
@@ -50,53 +66,48 @@ async function scrollPage(page) {
 async function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-async function scrollUpAndScreenshot(page, chatIndex) {
-  const selector = "div.x78zum5.xdt5ytf.x1iyjqo2.x6ikm8r.x1odjw0f.x16o0dkt"; // Chat container selector
 
-  // Initial scroll position (at the bottom)
+async function scrollUpAndScreenshot(page, chatIndex,innerText) {
+  const selector = "div.x78zum5.xdt5ytf.x1iyjqo2.x6ikm8r.x1odjw0f.x16o0dkt";
   let previousScrollTop = await page.evaluate((selector) => {
     const chatContainer = document.querySelector(selector);
-    chatContainer.scrollTop = chatContainer.scrollHeight; // Scroll to the bottom
+    chatContainer.scrollTop = chatContainer.scrollHeight;
     return chatContainer.scrollTop;
   }, selector);
-
   let currentScrollTop = previousScrollTop;
   let scrollPosition = 0;
   let reachedTop = false;
-  const maxIterations = 50; // Set a maximum number of scrolls to avoid infinite loops
+  const maxIterations = 50;
   let iterationCount = 0;
-
-  while (!reachedTop && iterationCount < maxIterations) {
-    // Take screenshot before scrolling up
-    await page.screenshot({
-      path: `screenshots/messages/chat_${chatIndex}_scroll_${scrollPosition}.png`,
+  const chatDiv = await page.$(selector);
+  if (!chatDiv) {
+    console.log(`Chat container not found for chat ${chatIndex}`);
+    return;
+  }
+  while (!reachedTop) {
+    await chatDiv.screenshot({
+      path: `../../screenshots/messages/chat_${chatIndex}_scroll_${scrollPosition}.png`,
     });
-
-    // Scroll up a bit
+    const links = await chatDiv.$$eval("a", (anchors) => anchors.map((a) => a.href));
+    console.log(links)
     await page.evaluate((selector) => {
       const chatContainer = document.querySelector(selector);
-      chatContainer.scrollTop -= 500; // Scroll upwards
+      chatContainer.scrollTop -= 500;
     }, selector);
-
-    await sleep(2000); // Wait for scroll
-
-    // Get current scroll position
+    await sleep(2000);
     currentScrollTop = await page.evaluate((selector) => {
       const chatContainer = document.querySelector(selector);
       return chatContainer.scrollTop;
     }, selector);
 
-    // Exit condition: check if the current position is almost equal to previous position
     if (Math.abs(currentScrollTop - previousScrollTop) < 10) {
-      reachedTop = true; // Top is reached
+      reachedTop = true;
     } else {
-      previousScrollTop = currentScrollTop; // Update scroll position
+      previousScrollTop = currentScrollTop;
     }
-
     scrollPosition++;
     iterationCount++;
   }
-
   if (reachedTop) {
     console.log(`Reached the top of the chat ${chatIndex}`);
   } else {
@@ -104,4 +115,10 @@ async function scrollUpAndScreenshot(page, chatIndex) {
   }
 }
 
-module.exports={saveScreenshotToDB,scrollPage,uploadScreenshot,sleep,scrollUpAndScreenshot}
+module.exports = {
+  saveScreenshotToDB,
+  scrollPage,
+  uploadScreenshot,
+  sleep,
+  scrollUpAndScreenshot,
+};
