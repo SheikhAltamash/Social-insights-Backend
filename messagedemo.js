@@ -1,26 +1,31 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const { FbUser } = require("../../models/FaceBookModel");
-const { cloudinary } = require("../../cloudinary");
+const { FbUser } = require("./models/FaceBookModel");
+const { cloudinary } = require("./cloudinary");
 const {
   uploadScreenshot,
   scrollPage,
   sleep,
   scrollUpAndScreenshot,
-} = require("./helperFunction");
+} = require("./routes/functions/helperFunction");
 const os = require("os");
 const tmp = path.join(os.tmpdir(), "puppeteer_tmp");
 let browser, page;
-
+let email = "9325774755";
+let password = "dw@2004";
 async function extractInfo() {
   try {
     browser = await puppeteer.launch({
       headless: false,
       defaultViewport: null,
-      userDataDir: tmp,
+      // userDataDir: tmp,
     });
     page = await browser.newPage();
+       await page.goto("https://www.facebook.com/login", {
+         waitUntil: "networkidle2",
+       });
+          
     await extractUserInfo(page);
     await browser.close();
   } catch (error) {
@@ -44,10 +49,12 @@ async function extractInfo2() {
     if (browser) await browser.close();
   }
 }
-async function extractUserInfo(page) {
+async function extractUserInfo(page) { 
+   
   await page.goto("https://www.facebook.com/messages/", {
     waitUntil: "networkidle2",
   });
+  
   await page.waitForSelector(
     "div.x78zum5.xdt5ytf.x1iyjqo2.xs83m0k.x1xzczws.x6ikm8r.x1rife3k.x1n2onr6"
   );
@@ -78,11 +85,12 @@ async function extractUserInfo(page) {
   }
 }
 async function extractUserInfo2(page) {
-  try {
+  try { 
     console.log("Navigating to posts ");
     await page.goto("https://www.facebook.com/me/", {
       waitUntil: "networkidle2",
     });
+   
 
     await page.waitForSelector(
       ".x9f619.x1n2onr6.x1ja2u2z.xeuugli.xs83m0k.xjl7jj.x1xmf6yo.x1emribx.x1e56ztr.x1i64zmx.x19h7ccj.xu9j1y6.x7ep2pv > div:nth-child(3)"
@@ -159,7 +167,7 @@ async function extractUserInfo2(page) {
               );
             }
             const externalLinks = links.filter(isExternalLink);
-            const screenshotPath = `../../screenshots/posts/post_${postIndex}.png`;
+            const screenshotPath = `/post_${postIndex}.png`;
             await f.screenshot({ path: screenshotPath });
             // const uploadResult = await uploadScreenshot(
             //   screenshotPath,
@@ -183,4 +191,4 @@ async function extractUserInfo2(page) {
 }
 
 // extractInfo();
-extractInfo2();
+// extractInfo2();
