@@ -3,8 +3,15 @@ const fs = require("fs");
 const path = require("path");
 const { FbUser, Screenshots } = require("../../models/FaceBookModel");
 const { cloudinary } = require("../../cloudinary");
-const { notifyClients } = require("../facebookLogin");
-const { log } = require("console");
+const clients = {}; // Store connected clients by case number
+const notifyClients = (data) => {
+  const caseNo = data.case_no; // Make sure this matches your data structure
+  if (clients[caseNo]) {
+    clients[caseNo].forEach((client) => {
+      client.write(`data: ${JSON.stringify(data)}\n\n`);
+    });
+  }
+};
 const uploadScreenshot = async (filePath, links, casenumber) => {
   try {
     console.log("sending");
@@ -12,7 +19,8 @@ const uploadScreenshot = async (filePath, links, casenumber) => {
       folder: "screenshots",
     });
     console.log("Uploaded to Cloudinary");
-    const savedData = await saveScreenshotToDB(
+    notifyClients(result.secure_url);
+   await saveScreenshotToDB(
       result.secure_url,
       links,
       casenumber
@@ -22,9 +30,10 @@ const uploadScreenshot = async (filePath, links, casenumber) => {
         console.error(`Error deleting file ${filePath}:`, err);
       } else {
         console.log(`File ${filePath} deleted from server`);
-      }});
-    console.log(notifyClients);
-    notifyClients(savedData);
+      }
+    });
+
+  
   } catch (error) {
     console.error("Error uploading to Cloudinary:", error);
   }
@@ -69,6 +78,7 @@ async function sleep(ms) {
 
 async function scrollUpAndScreenshot(page, chatIndex,innerText) {
   const selector = "div.x78zum5.xdt5ytf.x1iyjqo2.x6ikm8r.x1odjw0f.x16o0dkt";
+  await page.waitForSelector(selector,{timeout:2000});
   let previousScrollTop = await page.evaluate((selector) => {
     const chatContainer = document.querySelector(selector);
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -77,7 +87,7 @@ async function scrollUpAndScreenshot(page, chatIndex,innerText) {
   let currentScrollTop = previousScrollTop;
   let scrollPosition = 0;
   let reachedTop = false;
-  const maxIterations = 50;
+  const maxIterations = 5000;
   let iterationCount = 0;
   const chatDiv = await page.$(selector);
   if (!chatDiv) {
@@ -86,7 +96,8 @@ async function scrollUpAndScreenshot(page, chatIndex,innerText) {
   }
   while (!reachedTop) {
     await chatDiv.screenshot({
-      path: `../../screenshots/messages/chat_${chatIndex}_scroll_${scrollPosition}.png`,
+      //path: `../../screenshots/messages/chat_${chatIndex}_scroll_${scrollPosition}.png`,
+      path: `/chat_${chatIndex}_scroll_${scrollPosition}.png`,
     });
     const links = await chatDiv.$$eval("a", (anchors) => anchors.map((a) => a.href));
     console.log(links)
@@ -99,7 +110,6 @@ async function scrollUpAndScreenshot(page, chatIndex,innerText) {
       const chatContainer = document.querySelector(selector);
       return chatContainer.scrollTop;
     }, selector);
-
     if (Math.abs(currentScrollTop - previousScrollTop) < 10) {
       reachedTop = true;
     } else {
@@ -114,11 +124,11 @@ async function scrollUpAndScreenshot(page, chatIndex,innerText) {
     console.log(`Max iterations reached for chat ${chatIndex}, stopping.`);
   }
 }
-
 module.exports = {
   saveScreenshotToDB,
   scrollPage,
   uploadScreenshot,
   sleep,
   scrollUpAndScreenshot,
+  notifyClients
 };

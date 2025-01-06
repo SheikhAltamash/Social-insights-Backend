@@ -14,27 +14,7 @@ const tmp = path.join(os.tmpdir(), "puppeteer_tmp");
 let browser, page;
 let email = "9325774755";
 let password = "dw@2004";
-async function extractInfo() {
-  try {
-    browser = await puppeteer.launch({
-      headless: false,
-      defaultViewport: null,
-      // userDataDir: tmp,
-    });
-    page = await browser.newPage();
-       await page.goto("https://www.facebook.com/login", {
-         waitUntil: "networkidle2",
-       });
-          
-    await extractUserInfo(page);
-    await browser.close();
-  } catch (error) {
-    console.log(error.message);
-    if (browser) await browser.close();
-  }
-}
-
-async function extractInfo2() {
+async function extractMessages() {
   try {
     browser = await puppeteer.launch({
       headless: false,
@@ -42,14 +22,34 @@ async function extractInfo2() {
       userDataDir: tmp,
     });
     page = await browser.newPage();
-    await extractUserInfo2(page);
+       await page.goto("https://www.facebook.com/login", {
+         waitUntil: "networkidle2",
+       });
+          
+    await Messages(page);
     await browser.close();
   } catch (error) {
     console.log(error.message);
     if (browser) await browser.close();
   }
 }
-async function extractUserInfo(page) { 
+
+async function extractPosts() {
+  try {
+    browser = await puppeteer.launch({
+      headless: false,
+      defaultViewport: null,
+      userDataDir: tmp,
+    });
+    page = await browser.newPage();
+    await Posts(page);
+    await browser.close();
+  } catch (error) {
+    console.log(error.message);
+    if (browser) await browser.close();
+  }
+}
+async function Messages(page) { 
    
   await page.goto("https://www.facebook.com/messages/", {
     waitUntil: "networkidle2",
@@ -84,7 +84,7 @@ async function extractUserInfo(page) {
     postIndex++;
   }
 }
-async function extractUserInfo2(page) {
+async function Posts(page) {
   try { 
     console.log("Navigating to posts ");
     await page.goto("https://www.facebook.com/me/", {
@@ -190,5 +190,5 @@ async function extractUserInfo2(page) {
   }
 }
 
-// extractInfo();
-// extractInfo2();
+// extractMessages();
+// extractPosts();

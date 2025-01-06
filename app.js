@@ -3,8 +3,7 @@ const app = express();
 const port = 8080;
 const cors = require("cors");
 const mongoose = require("mongoose");
-const { login } = require("./routes/whatsaaplogin");
-const { router } = require("./routes/facebookLogin")
+const { router } = require("./routes/facebookRoutes")
 const facebookRouter = router;
 app.use(express.json());
 app.use(cors());
@@ -22,7 +21,3 @@ mongoose
 
 app.use("/facebook", facebookRouter);
 
-app.get("/whatsappQr", async (req, res) => {
-  const qrData = await login();
-  res.send(qrData);
-});
