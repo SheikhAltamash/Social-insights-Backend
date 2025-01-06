@@ -20,7 +20,7 @@ async function instaLogin() {
     browser = await puppeteer.launch({
       defaultViewport: null,
       userDataDir: "./tmp",
-      headless: false,
+      // headless: false,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     page = await browser.newPage();
@@ -114,8 +114,8 @@ async function extractAllData() {
   // Close the browser after tasks have completed
 
    await extractChats(page);
-  // await extractPosts(page);
-  // await extractFollowesAndFollowings(page);
+  await extractPosts(page);
+  await extractFollowesAndFollowings(page);
   await browser.close();
 }
 async function summarizeChatData(filePath, prompt, outputDir, filename) {
