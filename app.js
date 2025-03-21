@@ -15,7 +15,7 @@ let server=app.listen(port, () => {
 const ws = new WebSocketServer({ port:8081 });
 
 let wsInstance;
-wss.on("connection", (ws) => {
+ws.on("connection", (ws) => {
     console.log("WebSocket client connected");
     wsInstance = ws;
 
