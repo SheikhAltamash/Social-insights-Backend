@@ -18,7 +18,6 @@ let wsInstance;
 ws.on("connection", (ws) => {
     console.log("WebSocket client connected");
     wsInstance = ws;
-
     ws.on("close", () => {
         console.log("WebSocket client disconnected");
         wsInstance = null;
@@ -32,15 +31,24 @@ ws.on("connection", (ws) => {
 //   .then(() => console.log("Connected to MongoDB"))
 //   .catch((error) => console.error("MongoDB connection error:", error));
 
-app.use("/facebook", facebookRouter);
+// app.use("/facebook", facebookRouter);
 app.post("/instagramlogin",async (req, res) => {
   let { data } = req.body;
- 
- await extractAllData(
+  // Check if WebSocket connection exists
+  // if (!wsInstance || wsInstance.readyState !== WebSocket.OPEN) {
+  //   return res
+  //     .status(500)
+  //     .json({ message: "WebSocket connection not available" });
+  // }
 
-   data.username,
+  await extractAllData(
+    data.username,
     data.password,
-    (loginStatus) => {
+    (loginStatus,progress) => {
+      // Send progress updates via WebSocket
+      if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+        wsInstance.send(JSON.stringify({ type: "progress", status: progress }));
+      }
       if (
         loginStatus === "Login successful !" ||
         loginStatus === "Already logged in !"
@@ -49,8 +57,8 @@ app.post("/instagramlogin",async (req, res) => {
       } else {
         res.status(500).json({ message: loginStatus });
       }
-    }
-    
+    },
+    wsInstance
   );
 })
 

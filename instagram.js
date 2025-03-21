@@ -7,53 +7,54 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { sleep } = require("./routes/functions/helperFunction");
 let browser, page;
-let email = "test_spys";
-let password = "altamashsheikh@2004";
+// let email = "test_spys";
+// let password = "sheikh@2004";
 const { jsPDF } = require("jspdf");
 const sharp = require("sharp");
 const { Cluster } = require("puppeteer-cluster");
 const { pushEventToClients } = require("./app.js");
 const { timeout } = require("async");
 const { time } = require("console");
+const WebSocket = require("ws");
 const sendPdfToClient = (data) => {
   pushEventToClients(data);
 };
-async function instaLogin(email, password, onSuccess) {
+async function instaLogin(email1, password1, onSuccess,wsInstance) {
   console.log("Logging in...");
   let browser;
   let page;
   try {
     browser = await puppeteer.launch({
-      defaultViewport: null,
-      // userDataDir: "./tmp",
-      headless: false,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      // defaultViewport: null,
+      userDataDir: "./tmp",
+      // headless: false,
+      // args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     page = await browser.newPage();
     await page.goto("https://www.instagram.com/", {
       waitUntil: "networkidle2",
     });
 
-    await page.type('[aria-label="Phone number, username, or email"]', email);
-    await page.type('[aria-label="Password"]', password);
-    await page.click(
-      " div.x9f619.xjbqb8w.x78zum5.x168nmei.x13lgxp2.x5pf9jr.xo71vjh.xqui205.x1n2onr6.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1 > div:nth-child(3) > button"
-    );
-    try {
-      await page.waitForSelector(
-        "div.xkmlbd1.xvs91rp.xd4r4e8.x1anpbxc.x1m39q7l.xyorhqc.x540dpk.x2b8uid",
-        { timeout: 3000 }
-      );
+    // await page.type('[aria-label="Phone number, username, or email"]', email);
+    // await page.type('[aria-label="Password"]', password);
+    // await page.click(
+    //   " div.x9f619.xjbqb8w.x78zum5.x168nmei.x13lgxp2.x5pf9jr.xo71vjh.xqui205.x1n2onr6.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1 > div:nth-child(3) > button"
+    // );
+    // try {
+    //   await page.waitForSelector(
+    //     "div.xkmlbd1.xvs91rp.xd4r4e8.x1anpbxc.x1m39q7l.xyorhqc.x540dpk.x2b8uid",
+    //     { timeout: 3000 }
+    //   );
 
-      console.log("Incorrect creadintials");
-      await browser.close();
-      onSuccess("Incorrect Credentials", 500);
+    //   console.log("Incorrect creadintials");
+    //   await browser.close();
+    //   onSuccess("Incorrect Credentials", 500);
 
-      return;
-    } catch (e) {}
+    //   return;
+    // } catch (e) {}
 
-    await page.waitForNavigation({ waitUntil: "networkidle2" });
-    // onSuccess("Login successful !", 200);
+    // await page.waitForNavigation({ waitUntil: "networkidle2" });
+    onSuccess("Login successful !", 200);
     return { browser, page };
   } catch (e) {
     console.log(e);
@@ -113,11 +114,27 @@ async function multipleCluster(browser, page) {
   await cluster.close();
 }
 
-async function extractAllData(username, password, onSuccess) {
+async function extractAllData(username, password, onSuccess, wsInstance) {
   console.log("Extracting all data");
+  // Simulating progress updates
+  // setTimeout(() => {
+  //   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+  //     wsInstance.send(
+  //       JSON.stringify({ type: "progress", status: "Logging in..." })
+  //     );
+  //   }
+  // }, 1000);
+
+  // setTimeout(() => {
+  //   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
+  //     wsInstance.send(
+  //       JSON.stringify({ type: "progress", status: "Fetching data..." })
+  //     );
+  //   }
+  // }, 2000);
   let loginResult;
   try {
-    loginResult = await instaLogin(username, password, onSuccess);
+    loginResult = await instaLogin(username, password, onSuccess,wsInstance);
   } catch (e) {
     onSuccess("Login failed", 500);
     return;
@@ -128,9 +145,9 @@ async function extractAllData(username, password, onSuccess) {
   //await multipleCluster(browser, page);
   // Close the browser after tasks have completed
 
-  await extractChats(page);
-  await extractPosts(page);
-  await extractFollowesAndFollowings(page);
+  await extractChats(page,wsInstance);
+  await extractPosts(page,wsInstance);
+  await extractFollowesAndFollowings(page,wsInstance);
   await browser.close();
 }
 async function summarizeChatData(filePath, prompt, outputDir, filename) {
@@ -154,7 +171,14 @@ async function summarizeChatData(filePath, prompt, outputDir, filename) {
   }
 }
 
-async function extractFollowesAndFollowings(page, scrollDelay = 1000) {
+async function extractFollowesAndFollowings(page, wsInstance) {
+  try {
+    wsInstance.send(
+      JSON.stringify({ type: "progress", status: "Analysing Followers and Followings..." })
+    );
+  } catch (e) {
+    console.log(e.message);
+  }
   await page.goto("https://www.instagram.com/");
   await page.waitForSelector(
     "div.x1iyjqo2.xh8yej3 > div:nth-child(8) > div > span > div > a"
@@ -291,10 +315,22 @@ async function extractFollowesAndFollowings(page, scrollDelay = 1000) {
   await ScrollFolowersAndfollowings(numberofFollowings, page);
 }
 
-async function extractChats(page) {
+async function extractChats(page,wsInstance) {
   await page.goto("https://www.instagram.com/direct/inbox/", {
     waitUntil: "networkidle2",
   });
+  // Check if wsInstance is valid before using it
+  console.log(wsInstance);
+  console.log("Extracting data from chats !")
+
+  // if (wsInstance) {
+  //   wsInstance.send(
+  //     JSON.stringify({ type: "progress", status: "Fetching chats...." })
+  //   );
+  // } else {
+  //   console.log("WebSocket instance is not available.");
+  //   // return; 
+  // }
   try {
     let selector =
       "div.x7r02ix.xf1ldfh.x131esax.xdajt7p.xxfnqb6.xb88tzc.xw2csxc.x1odjw0f.x5fp0pe > div > div > div._a9-z > button._a9--._ap36._a9_1";
@@ -323,13 +359,14 @@ async function extractChats(page) {
     );
 
     await sleep(1000);
-    await scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath);
+    await scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance);
 
     chatIndex++;
   }
 }
 
-async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath) {
+async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance) {
+ 
   const selector =
     "div.x78zum5.x1r8uery.xdt5ytf.x1iyjqo2.x6ikm8r.x10wlt62 > div > div > div > div > div > div";
   try {
@@ -338,7 +375,28 @@ async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath) {
     console.log(`Chat container not found for chat ${chatIndex}:`, e.message);
     return;
   }
-
+ // Sending chat user name
+ const name ="div.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.x1iyjqo2.xs83m0k.xsyo7zv.x16hj40l.x10b6aqq.x1yrsyyn > a > div > div > h2 > span > span";
+  let nameofChat;
+  try {
+   const element = await page.waitForSelector(name);
+   nameofChat = await page.evaluate((el) => el.textContent, element);
+   
+ } catch (error) {
+   console.error("Error extracting text:", error);
+  
+  }
+  // if (nameofChat !== null) {
+  // try  {
+  //     wsInstance.send(
+  //       JSON.stringify({ type: "progress", status: `Analysing chat with ${chatName}` })
+  //     );
+  // } catch (e) {
+  //   console.log(e.message)
+  //   }
+  // }
+  console.log("Extracting chat of : ",nameofChat)
+ 
   let previousScrollTop = await page.evaluate((selector) => {
     const chatContainer = document.querySelector(selector);
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -476,50 +534,62 @@ async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath) {
   );
 
   // Add screenshots to PDF from bottom to top
-  const doc = new jsPDF();
-  for (let i = screenshots.length - 1; i >= 0; i--) {
-    const imageBuffer = fs.readFileSync(screenshots[i]);
-    const image = sharp(imageBuffer);
-    const metadata = await image.metadata();
-    const imgWidth = metadata.width;
-    const imgHeight = metadata.height;
+  // const doc = new jsPDF();
+  // for (let i = screenshots.length - 1; i >= 0; i--) {
+  //   const imageBuffer = fs.readFileSync(screenshots[i]);
+  //   const image = sharp(imageBuffer);
+  //   const metadata = await image.metadata();
+  //   const imgWidth = metadata.width;
+  //   const imgHeight = metadata.height;
 
-    // Set the PDF page size to match the image size
-    if (i !== screenshots.length - 1) {
-      doc.addPage();
-    }
-    doc.internal.pageSize.width = imgWidth;
-    doc.internal.pageSize.height = imgHeight;
+  //   // Set the PDF page size to match the image size
+  //   if (i !== screenshots.length - 1) {
+  //     doc.addPage();
+  //   }
+  //   doc.internal.pageSize.width = imgWidth;
+  //   doc.internal.pageSize.height = imgHeight;
 
-    // Add the image to the PDF
-    doc.addImage(
-      imageBuffer.toString("base64"),
-      "JPEG",
-      0,
-      0,
-      imgWidth,
-      imgHeight
-    );
-  }
+  //   // Add the image to the PDF
+  //   doc.addImage(
+  //     imageBuffer.toString("base64"),
+  //     "JPEG",
+  //     0,
+  //     0,
+  //     imgWidth,
+  //     imgHeight
+  //   );
+  // }
 
-  // Ensure the directory exists for PDFs
-  const outputDirForPdf = path.join(__dirname, "chats");
-  if (!fs.existsSync(outputDirForPdf)) {
-    fs.mkdirSync(outputDirForPdf, { recursive: true });
-  }
+  // // Ensure the directory exists for PDFs
+  // const outputDirForPdf = path.join(__dirname, "chats");
+  // if (!fs.existsSync(outputDirForPdf)) {
+  //   fs.mkdirSync(outputDirForPdf, { recursive: true });
+  // }
 
-  // Save the PDF with the sanitized chat name
-  const outputPdfPath = path.join(outputDirForPdf, `${sanitizedChatName}.pdf`);
-  doc.save(outputPdfPath);
-  console.log(`PDF saved for chat ${sanitizedChatName} at: ${outputPdfPath}`);
-  ChatsPdfPath.push({name:sanitizedChatName,path:outputPdfPath,option:"chats"});
-  // Delete all screenshots
-  screenshots.forEach((screenshotPath) => {
-    fs.unlinkSync(screenshotPath);
-  });
+  // // Save the PDF with the sanitized chat name
+  // const outputPdfPath = path.join(outputDirForPdf, `${sanitizedChatName}.pdf`);
+  // doc.save(outputPdfPath);
+  // console.log(`PDF saved for chat ${sanitizedChatName} at: ${outputPdfPath}`);
+  // ChatsPdfPath.push({name:sanitizedChatName,path:outputPdfPath,option:"chats"});
+  // // Delete all screenshots
+  // screenshots.forEach((screenshotPath) => {
+  //   fs.unlinkSync(screenshotPath);
+  // });
+
 }
-async function extractPosts(page) {
+
+
+async function extractPosts(page,wsInstance) {
   await page.goto("https://www.instagram.com/");
+console.log("Extracting posts !")
+  
+ try{ wsInstance.send(
+    JSON.stringify({ type: "progress", status: "Analysing posts..." })
+ );
+ } catch (e) {
+   console.log(e.message)
+  }
+
   await page.waitForSelector(
     "div.x1iyjqo2.xh8yej3 > div:nth-child(8) > div > span > div > a"
   );
