@@ -9,8 +9,8 @@ const {extractAllData} = require("./instagram.js");
 const { WebSocketServer } = require("ws");
 app.use(express.json());
 app.use(cors());
-let server=app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+app.listen(port, () => {
+  console.log(`Server running at ${port}`);
 });
 const ws = new WebSocketServer({ port:8081 });
 
@@ -24,13 +24,13 @@ ws.on("connection", (ws) => {
         wsInstance = null;
     });
 });
-mongoose
-  .connect("mongodb://localhost:27017/fuzzer", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((error) => console.error("MongoDB connection error:", error));
+// mongoose
+//   .connect("mongodb://localhost:27017/fuzzer", {
+//     useNewUrlParser: true,
+//     useUnifiedTopology: true,
+//   })
+//   .then(() => console.log("Connected to MongoDB"))
+//   .catch((error) => console.error("MongoDB connection error:", error));
 
 app.use("/facebook", facebookRouter);
 app.post("/instagramlogin",async (req, res) => {
