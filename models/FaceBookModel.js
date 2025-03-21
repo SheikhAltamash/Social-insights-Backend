@@ -40,3 +40,7 @@ const userSchema = new mongoose.Schema({
 const FbUser = mongoose.model("FbUsers", userSchema);
 const Screenshots = mongoose.model("Screenshots",screenshotSchema) 
 module.exports = { FbUser, Screenshots };
+
+
+
+
