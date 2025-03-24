@@ -26,10 +26,7 @@ ws.on("connection", (ws) => {
   });
 });
 mongoose
-  .connect("mongodb://localhost:27017/fuzzer", {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_DB_URL)
   .then(() => console.log("Connected to MongoDB"))
   .catch((error) => console.error("MongoDB connection error:", error));
 
