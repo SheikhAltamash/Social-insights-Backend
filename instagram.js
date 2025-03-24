@@ -6,20 +6,15 @@ const path = require("path");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { sleep } = require("./routes/functions/helperFunction");
-let browser, page;
 // let email = "test_spys";
 // let password = "sheikh@2004";
 const { jsPDF } = require("jspdf");
 const sharp = require("sharp");
-const { Cluster } = require("puppeteer-cluster");
-const { pushEventToClients } = require("./app.js");
-const { timeout } = require("async");
-const { time } = require("console");
-const WebSocket = require("ws");
-const sendPdfToClient = (data) => {
-  pushEventToClients(data);
-};
-async function instaLogin(email1, password1, onSuccess,wsInstance) {
+const { InstaUser } = require("./models/InstaModel.js");
+const { cloudinary } =require("./cloudinary.js")
+
+
+async function instaLogin(email1, password1, onSuccess, wsInstance) {
   console.log("Logging in...");
   let browser;
   let page;
@@ -61,120 +56,41 @@ async function instaLogin(email1, password1, onSuccess,wsInstance) {
     if (browser) {
       await browser.close();
     }
+
     return null;
   }
 }
-
-async function singleFunction(page) {
-  console.log("Starting singleFunction");
-  await new Promise((resolve) => setTimeout(resolve, 2000));
-  console.log("Completed singleFunction");
-}
-
-async function clusteredTask(data, browser) {
-  const { taskNumber } = data;
-  const page = await browser.newPage();
-  try {
-    console.log(`Starting task ${taskNumber}`);
-    if (taskNumber === 1) {
-      //  Extracting Posts logic goes here
-      await extractPosts(page);
-    }
-    //  else if (taskNumber === 2) {
-    //   //   Extracting Chats logic goes here
-    //   await extractChats(page);
-    // } else if (taskNumber === 3) {
-    //   // Extracting Followes And Followings logic goes here
-    //   await extractFollowesAndFollowings(page);
-    // }
-    console.log(`Completed task ${taskNumber}`);
-  } catch (error) {
-    console.error("error during clustered task", error);
-  } finally {
-    await page.close();
-  }
-}
-
-async function multipleCluster(browser, page) {
-  const cluster = await Cluster.launch({
-    concurrency: Cluster.CONCURRENCY_PAGE,
-    maxConcurrency: 5,
-    headless: false,
-  });
-
-  cluster.task(async ({ data }) => {
-    await clusteredTask(data, browser);
-  });
-
-  cluster.queue({ taskNumber: 1 });
-  cluster.queue({ taskNumber: 2 });
-  cluster.queue({ taskNumber: 3 });
-
-  await cluster.idle();
-  await cluster.close();
-}
-
-async function extractAllData(username, password, onSuccess, wsInstance) {
+async function extractAllData(username, password, onSuccess, wsInstance,data) {
   console.log("Extracting all data");
-  // Simulating progress updates
-  // setTimeout(() => {
-  //   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
-  //     wsInstance.send(
-  //       JSON.stringify({ type: "progress", status: "Logging in..." })
-  //     );
-  //   }
-  // }, 1000);
-
-  // setTimeout(() => {
-  //   if (wsInstance && wsInstance.readyState === WebSocket.OPEN) {
-  //     wsInstance.send(
-  //       JSON.stringify({ type: "progress", status: "Fetching data..." })
-  //     );
-  //   }
-  // }, 2000);
+ 
   let loginResult;
   try {
-    loginResult = await instaLogin(username, password, onSuccess,wsInstance);
+    loginResult = await instaLogin(username, password, onSuccess, wsInstance);
   } catch (e) {
     onSuccess("Login failed", 500);
     return;
   }
-  if (!loginResult) return;
+  if (!loginResult) {
+    wsInstance.send(JSON.stringify({ type: "crash", status: "404" }));
+    return;
+  }
   const { browser, page } = loginResult;
-  // await singleFunction(page);
-  //await multipleCluster(browser, page);
-  // Close the browser after tasks have completed
+  let user = new InstaUser({ name: data.name, case_no: data.case_no });
+  
+  await extractChats(page, wsInstance,data,user);
+  await extractPosts(page, wsInstance,user);
+  await extractFollowesAndFollowings(page, wsInstance,user);
+  wsInstance.send(JSON.stringify({ type: "done", status: "done" }));
 
-  await extractChats(page,wsInstance);
-  await extractPosts(page,wsInstance);
-  await extractFollowesAndFollowings(page,wsInstance);
   await browser.close();
 }
-async function summarizeChatData(filePath, prompt, outputDir, filename) {
-  try {
-    // Load chat data from the file
-    let chatData = fs.readFileSync(filePath, "utf-8");
-
-    const combinedData = `${chatData}\n\n${prompt}`;
-    const genAI = new GoogleGenerativeAI(
-      "AIzaSyA3T146BOKH8clVHZeMU_Jsr3CTGeHx4KM"
-    );
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-    const result = await model.generateContent(combinedData);
-    const outputTxtPath = path.join(outputDir, `${filename}.txt`);
-    fs.writeFileSync(outputTxtPath, result, "utf8");
-    console.log(
-      `Summarized chat report file saved for chat ${filename} at: ${outputTxtPath}`
-    );
-  } catch (error) {
-    console.error("Error summarizing chat data:", error.message);
-  }
-}
-
-async function extractFollowesAndFollowings(page, wsInstance) {
+async function extractFollowesAndFollowings(page, wsInstance,user) {
   try {
     wsInstance.send(
-      JSON.stringify({ type: "progress", status: "Analysing Followers and Followings..." })
+      JSON.stringify({
+        type: "progress",
+        status: "Analysing Followers and Followings...",
+      })
     );
   } catch (e) {
     console.log(e.message);
@@ -300,7 +216,19 @@ async function extractFollowesAndFollowings(page, wsInstance) {
       const outputPdfPath = path.join(outputDirForPdf, `Followings.pdf`);
       doc.save(outputPdfPath);
       console.log(`PDF saved for followings at: ${outputPdfPath}`);
-
+      try {
+        wsInstance.send(
+          JSON.stringify({ type: "progress", status: "Storing followers data ..." })
+        );
+      } catch (e) {
+        console.log(e.message);
+      }
+      const uploaded = await cloudinary.uploader.upload(outputPdfPath, {
+        folder: "chats",
+        // resource_type: 'raw' ,
+      });
+      user.followers = uploaded.secure_url;
+      user.save();
       // Delete all screenshots
       screenshots.forEach((screenshotPath) => {
         fs.unlinkSync(screenshotPath);
@@ -311,26 +239,21 @@ async function extractFollowesAndFollowings(page, wsInstance) {
     }
   }
 
-
   await ScrollFolowersAndfollowings(numberofFollowings, page);
 }
-
-async function extractChats(page,wsInstance) {
+async function extractChats(page, wsInstance,data,user) {
   await page.goto("https://www.instagram.com/direct/inbox/", {
     waitUntil: "networkidle2",
   });
   // Check if wsInstance is valid before using it
-  console.log(wsInstance);
-  console.log("Extracting data from chats !")
-
-  // if (wsInstance) {
-  //   wsInstance.send(
-  //     JSON.stringify({ type: "progress", status: "Fetching chats...." })
-  //   );
-  // } else {
-  //   console.log("WebSocket instance is not available.");
-  //   // return; 
-  // }
+  console.log("Extracting data from chats !");
+  if (wsInstance) {
+    wsInstance.send(
+      JSON.stringify({ type: "progress", status: "Fetching chats...." })
+    );
+  } else {
+    console.log("WebSocket instance is not available.");
+  }
   try {
     let selector =
       "div.x7r02ix.xf1ldfh.x131esax.xdajt7p.xxfnqb6.xb88tzc.xw2csxc.x1odjw0f.x5fp0pe > div > div > div._a9-z > button._a9--._ap36._a9_1";
@@ -359,14 +282,17 @@ async function extractChats(page,wsInstance) {
     );
 
     await sleep(1000);
-    await scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance);
+    await scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance,user,data);
 
     chatIndex++;
   }
 }
-
-async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance) {
- 
+async function scrollUpAndScreenshot(
+  page,
+  chatIndex,
+  ChatsPdfPath,
+  wsInstance,user,data
+) {
   const selector =
     "div.x78zum5.x1r8uery.xdt5ytf.x1iyjqo2.x6ikm8r.x10wlt62 > div > div > div > div > div > div";
   try {
@@ -375,28 +301,35 @@ async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance) 
     console.log(`Chat container not found for chat ${chatIndex}:`, e.message);
     return;
   }
- // Sending chat user name
- const name ="div.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.x1iyjqo2.xs83m0k.xsyo7zv.x16hj40l.x10b6aqq.x1yrsyyn > a > div > div > h2 > span > span";
+  // Sending chat user name
+  const name =
+    "div.x9f619.x1n2onr6.x1ja2u2z.x78zum5.xdt5ytf.x193iq5w.xeuugli.x1r8uery.x1iyjqo2.xs83m0k.xsyo7zv.x16hj40l.x10b6aqq.x1yrsyyn > a > div > div > h2 ";
   let nameofChat;
   try {
-   const element = await page.waitForSelector(name);
-   nameofChat = await page.evaluate((el) => el.textContent, element);
-   
- } catch (error) {
-   console.error("Error extracting text:", error);
-  
+    const element = await page.waitForSelector(name);
+    nameofChat = await page.evaluate((el) => el.textContent, element);
+  } catch (error) {
+    console.error("Error extracting text:", error);
   }
-  // if (nameofChat !== null) {
-  // try  {
-  //     wsInstance.send(
-  //       JSON.stringify({ type: "progress", status: `Analysing chat with ${chatName}` })
-  //     );
-  // } catch (e) {
-  //   console.log(e.message)
-  //   }
-  // }
-  console.log("Extracting chat of : ",nameofChat)
- 
+  if (
+    nameofChat == "Kaustup Dipawale" || nameofChat== "Rinish Gajbhiye" ||nameofChat== "@sidra_0612"
+  ) {
+    return;
+  }
+
+  let sendingname = "Parsing chat of  " + nameofChat;
+  if (nameofChat) {
+    try {
+      wsInstance.send(
+        JSON.stringify({
+          type: "progress",
+          status: sendingname,
+        })
+      );
+    } catch (e) {
+      console.log(e.message);
+    }
+  }
   let previousScrollTop = await page.evaluate((selector) => {
     const chatContainer = document.querySelector(selector);
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -532,6 +465,19 @@ async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance) 
   console.log(
     `Text file saved for chat ${sanitizedChatName} at: ${outputTxtPath}`
   );
+  const outputDirforchat = path.join(__dirname, "Analysed_Chats");
+  let analysename = "Generating a report of the chat with " + nameofChat;
+  try {
+    wsInstance.send(
+      JSON.stringify({
+        type: "progress",
+        status: analysename,
+      })
+    );
+  } catch (e) {
+    console.log(e.message);
+  }
+  summarizeChatData(outputTxtPath,prompt,outputDirforchat,user,sanitizedChatName,wsInstance);
 
   // Add screenshots to PDF from bottom to top
   // const doc = new jsPDF();
@@ -575,19 +521,17 @@ async function scrollUpAndScreenshot(page, chatIndex, ChatsPdfPath, wsInstance) 
   // screenshots.forEach((screenshotPath) => {
   //   fs.unlinkSync(screenshotPath);
   // });
-
 }
-
-
-async function extractPosts(page,wsInstance) {
+async function extractPosts(page, wsInstance,user) {
   await page.goto("https://www.instagram.com/");
-console.log("Extracting posts !")
-  
- try{ wsInstance.send(
-    JSON.stringify({ type: "progress", status: "Analysing posts..." })
- );
- } catch (e) {
-   console.log(e.message)
+  console.log("Extracting posts !");
+
+  try {
+    wsInstance.send(
+      JSON.stringify({ type: "progress", status: "Analysing posts..." })
+    );
+  } catch (e) {
+    console.log(e.message);
   }
 
   await page.waitForSelector(
@@ -708,13 +652,82 @@ console.log("Extracting posts !")
   const outputPdfPath = path.join(outputDirForPdf, `Posts_Instagram.pdf`);
   doc.save(outputPdfPath);
   console.log(`PDF saved for posts at: ${outputPdfPath}`);
-
+ try {
+   wsInstance.send(
+     JSON.stringify({ type: "progress", status: "Storing posts data ..." })
+   );
+ } catch (e) {
+   console.log(e.message);
+  }
+   const uploaded = await cloudinary.uploader.upload(outputPdfPath, {
+     folder: "chats",
+     // resource_type: 'raw' ,
+   });
+   user.posts = uploaded.secure_url;
+   user.save();
   // Delete all screenshots
   screenshots.forEach((screenshotPath) => {
     fs.unlinkSync(screenshotPath);
   });
 }
+async function summarizeChatData(filePath,prompt,outputDir,user,chatname,wsInstance) {
+  try {
+    // Load chat data from the file
+    let chatData = fs.readFileSync(filePath, "utf-8");
+    // console.log(chatData);
+    const combinedData = `${chatData}\n\n${prompt}`;
+    const genAI = new GoogleGenerativeAI(process.env.OPENAI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const result = await model.generateContent(combinedData);
+    // console.log(result.response.text());
+    const outputDir = path.join(__dirname, "Analysed_Chats");
+    const outputTxtPath = path.join(outputDir, "output.txt");
+    fs.writeFileSync(outputTxtPath, result.response.text(), "utf8");
+    console.log(
+      `Summarized chat report file saved for chat one at: ${outputTxtPath}`
+    );
+    convertTxtToPdf(outputTxtPath,outputTxtPath)
+    const uploaded = await cloudinary.uploader.upload(outputTxtPath, {
+      folder: "chats",
+      // resource_type: 'raw' ,
+    })
+    chatname = chatname.replace(" · Instagram", "");
+    user.chats.push({ name: chatname, url: uploaded.secure_url });
+  } catch (error) {
 
-// extractAllData()
+    console.error("Error summarizing chat data:", error);
+  }
+}
+let prompt =
+  "Analyze the following chat data and generate a structured report for a social media investigation. Identify and list all offensive words, slurs, and inappropriate language used in the conversation. Provide a detailed breakdown of all topics discussed, ensuring clarity and completeness. Extract and categorize all named entities, including people, locations, organizations, and any other identifiable entities mentioned in the chat. Clearly separate these entities into distinct sections. Identify and highlight any vague, suspicious, or coded discussions that may indicate hidden meanings, illicit activities, or deceptive communication. Analyze the chat for any direct or indirect threats, warnings, or statements suggesting harmful intent. The report must be structured into clear sections without any tables, special characters, bold text, or variations in font size. All text must remain consistent in appearance without formatting emphasis. Do not include any predefined headers, titles, dates, usernames, or subjects such as 'Social Media Investigation Report,' 'Date,' 'Subject,' 'Analysis of Instagram Post by nz.for.genz,' or any similar introductory text in the report.";
+
+// summarizeChatData("A:/ALTAMASH A Disk/CODE/Social forensics/server/chat_texts/_kaustup_dipawale1404 · Instagram.txt", prompt);
+async function convertTxtToPdf(inputTxtPath, outputPdfPath) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new jsPDF();
+      const text = fs.readFileSync(inputTxtPath, "utf-8");
+      const marginLeft = 10;
+      const marginTop = 10;
+      const pageWidth = doc.internal.pageSize.getWidth() - 20; // Account for margins
+      const pageHeight = doc.internal.pageSize.getHeight() - 20;
+      const lineHeight = 8;
+      let yPosition = marginTop;
+      const lines = doc.splitTextToSize(text, pageWidth);// Auto-wrap text
+      lines.forEach((line) => {
+        if (yPosition + lineHeight > pageHeight) {
+          doc.addPage();
+          yPosition = marginTop; // Reset Y position for new page
+        }
+        doc.text(line, marginLeft, yPosition);
+        yPosition += lineHeight;
+      });
+      doc.save(outputPdfPath); // Save the full-text PDF
+      resolve();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
 
 module.exports = { extractAllData };

@@ -36,7 +36,7 @@ router.get("/fbData", async (req, res) => {
 });
  // Stores clients grouped by case_no
 
-const clients = {}; 
+const clients = {} 
 router.get("/events", (req, res) => {
   const caseNo = req.query.caseNo;
   res.setHeader("Content-Type", "text/event-stream");
