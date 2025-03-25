@@ -13,11 +13,11 @@ const { WebSocketServer } = require("ws");
 const { InstaUser } = require("./models/InstaModel.js");
 app.use(express.json());
 app.use(cors());
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server running at ${port}`);
 });
-const ws = new WebSocketServer({ port: 8081 });
 
+const ws = new WebSocketServer({ server }); 
 let wsInstance;
 ws.on("connection", (ws) => {
   console.log("WebSocket client connected");
