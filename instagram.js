@@ -19,10 +19,10 @@ async function instaLogin(email, password, onSuccess, wsInstance) {
   let page;
   try {
     browser = await puppeteer.launch({
-      // defaultViewport: null,
-      // userDataDir: "./tmp",
-      // headless: false,
-      // args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium-browser",
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     page = await browser.newPage();
     await page.goto("https://www.instagram.com/", {
