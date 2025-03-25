@@ -1,4 +1,6 @@
-require("dotenv").config();
+if (process.env.NODE_ENV !== "production") {
+  require("dotenv").config();
+}
 const express = require("express");
 const app = express();
 const port = 8080;
@@ -37,8 +39,8 @@ app.post("/InstaIndividual", async (req, res) => {
   res.send(user);
 });
 app.get("/Instagram/AllData", async (req, res) => {
-  console.log("request came from the user for all data of instagram")
-   let Data = await InstaUser.find();
+  console.log("request came from the user for all data of instagram");
+  let Data = await InstaUser.find();
   let data = Data.map((user) => ({
     name: user.name,
     case_no: user.case_no,
