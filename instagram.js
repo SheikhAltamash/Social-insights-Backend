@@ -13,9 +13,7 @@ const { InstaUser } = require("./models/InstaModel.js");
 const { cloudinary } = require("./cloudinary.js");
 
 // cmd from render build command
-// npm install && npx puppeteer browsers install chrome
-
-const puppeteer = require("puppeteer");
+// npm install && npx puppeteer browsers
 
 async function instaLogin() {
   try {
