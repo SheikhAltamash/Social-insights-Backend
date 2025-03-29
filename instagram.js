@@ -3,60 +3,69 @@ if (process.env.NODE_ENV !== "production") {
 }
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const path = require("path");
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const fs = require("fs");
 const { sleep } = require("./routes/functions/helperFunction");
-// let email = "test_spys";
-// let password = "sheikh@2004";
 const { jsPDF } = require("jspdf");
 const sharp = require("sharp");
 const { InstaUser } = require("./models/InstaModel.js");
 const { cloudinary } = require("./cloudinary.js");
 
 async function instaLogin(email, password, onSuccess, wsInstance) {
-  console.log("Logging in...");
+  console.log("[SERVER] instaLogin function triggered");
+  console.log("[SERVER] Logging in with email:", email);
   let browser;
   let page;
   try {
+    console.log("[SERVER] Launching Puppeteer...");
     browser = await puppeteer.launch({
-      executablePath: process.env.production
-        ? process.env.PUPPETEER_EXECUTABLE_PATH
-        : puppeteer.executablePath(),
+      executablePath:
+        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome",
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
+
+    console.log("[SERVER] Puppeteer launched successfully");
     page = await browser.newPage();
+    console.log("[SERVER] Navigating to Instagram...");
     await page.goto("https://www.instagram.com/", {
       waitUntil: "networkidle2",
     });
 
+    console.log("[SERVER] Typing credentials...");
     await page.type('[aria-label="Phone number, username, or email"]', email);
     await page.type('[aria-label="Password"]', password);
+    console.log("[SERVER] Clicking login button...");
     await page.click(
       " div.x9f619.xjbqb8w.x78zum5.x168nmei.x13lgxp2.x5pf9jr.xo71vjh.xqui205.x1n2onr6.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1 > div:nth-child(3) > button"
     );
+
     try {
+      console.log("[SERVER] Checking for incorrect credentials message...");
       await page.waitForSelector(
         "div.xkmlbd1.xvs91rp.xd4r4e8.x1anpbxc.x1m39q7l.xyorhqc.x540dpk.x2b8uid",
         { timeout: 3000 }
       );
-
-      console.log("Incorrect creadintials");
+      console.log("[SERVER] Incorrect credentials detected.");
       await browser.close();
       onSuccess("Incorrect Credentials", 500);
-
       return;
-    } catch (e) {}
-
-    await page.waitForNavigation({ waitUntil: "networkidle2" });
-    // onSuccess("Login successful !", 200);
-    return { browser, page };
-  } catch (e) {
-    console.log(e);
-    if (browser) {
-      await browser.close();
+    } catch (e) {
+      console.log(
+        "[SERVER] No incorrect credentials message found, proceeding..."
+      );
     }
 
+    console.log("[SERVER] Waiting for navigation after login...");
+    await page.waitForNavigation({ waitUntil: "networkidle2" });
+    console.log("[SERVER] Login successful!");
+    return { browser, page };
+  } catch (e) {
+    console.log("[ERROR]", e);
+    if (browser) {
+      console.log("[SERVER] Closing browser due to error...");
+      await browser.close();
+    }
     return null;
   }
 }
@@ -331,13 +340,13 @@ async function scrollUpAndScreenshot(
   } catch (error) {
     console.error("Error extracting text:", error);
   }
-  if (
-    nameofChat == "Kaustup Dipawale" ||
-    nameofChat == "Rinish Gajbhiye" ||
-    nameofChat == "@sidra_0612"
-  ) {
-    return;
-  }
+  // if (
+  //   nameofChat == "Kaustup Dipawale" ||
+  //   nameofChat == "Rinish Gajbhiye" ||
+  //   nameofChat == "@sidra_0612"
+  // ) {
+  //   return;
+  // }
 
   let sendingname = "Parsing chat of  " + nameofChat;
   if (nameofChat) {
@@ -421,6 +430,25 @@ async function scrollUpAndScreenshot(
     // Add unique lines to the set with an ID
     textContent.split("\n").forEach((line) => {
       const trimmedLine = line.trim();
+      // Regular expression to detect time and date formats
+      const dateTimePattern =
+        /\b(?:\d{1,2}:\d{2}\s?(?:AM|PM)?)|\b(?:\w+\s\d{1,2},?\s?\d{0,4})/i;
+
+      // Skip lines that match date/time patterns
+      if (
+        !trimmedLine ||
+        dateTimePattern.test(trimmedLine) ||
+        trimmedLine.toLowerCase() === "enter"
+      )
+        return;
+
+      // Send chat status after 0.5 seconds without blocking execution
+      setTimeout(() => {
+        wsInstance.send(
+          JSON.stringify({ type: "chatStatus", status: trimmedLine })
+        );
+      }, 1000);
+
       if (
         trimmedLine &&
         !uniqueText.some((item) => item.text === trimmedLine)
@@ -482,7 +510,7 @@ async function scrollUpAndScreenshot(
   // Write the array without IDs to the text file
   uniqueText.sort((a, b) => a.id - b.id);
   const textWithoutIds = uniqueText.map((item) => item.text);
-
+  console.log(textWithoutIds.join("\n"));
   fs.writeFileSync(outputTxtPath, textWithoutIds.join("\n"), "utf8");
   console.log(
     `Text file saved for chat ${sanitizedChatName} at: ${outputTxtPath}`
