@@ -11,6 +11,9 @@ const sharp = require("sharp");
 const { InstaUser } = require("./models/InstaModel.js");
 const { cloudinary } = require("./cloudinary.js");
 
+// cmd from render build command
+// npm install && npx puppeteer browsers install chrome
+
 async function instaLogin(email, password, onSuccess, wsInstance) {
   console.log("[SERVER] instaLogin function triggered");
   console.log("[SERVER] Logging in with email:", email);
@@ -20,7 +23,7 @@ async function instaLogin(email, password, onSuccess, wsInstance) {
     console.log("[SERVER] Launching Puppeteer...");
     browser = await puppeteer.launch({
       executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome",
+        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
