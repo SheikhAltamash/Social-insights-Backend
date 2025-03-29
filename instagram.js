@@ -23,9 +23,10 @@ async function instaLogin(email, password, onSuccess, wsInstance) {
   try {
     console.log("[SERVER] Launching Puppeteer...");
     browser = await puppeteer.launch({
-      executablePath: "/opt/google/chrome/chrome",
+      //executablePath: "/opt/google/chrome/chrome",.
+      executablePath: "usr/bin/google-chrome-stable",
       // executablePath:
-        // process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome",
+      // process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome",
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
