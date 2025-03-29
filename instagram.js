@@ -3,7 +3,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const path = require("path");
-const puppeteer = require("puppeteer-core");
+const puppeteer = require("puppeteer");
 // const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { sleep } = require("./routes/functions/helperFunction");
@@ -15,66 +15,32 @@ const { cloudinary } = require("./cloudinary.js");
 // cmd from render build command
 // npm install && npx puppeteer browsers install chrome
 
-async function instaLogin(email, password, onSuccess, wsInstance) {
-  console.log("[SERVER] instaLogin function triggered");
-  console.log("[SERVER] Logging in with email:", email);
-  let browser;
-  let page;
+const puppeteer = require("puppeteer");
+
+async function instaLogin() {
   try {
-    console.log("[SERVER] Launching Puppeteer...");
-    browser = await puppeteer.launch({
-      //executablePath: "/opt/google/chrome/chrome",.
-      executablePath: "usr/bin/google-chrome-stable",
-      // executablePath:
-      // process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome",
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    console.log("Launching Puppeteer...");
+
+    const browser = await puppeteer.launch({
+      executablePath: puppeteer.executablePath(), // Use Puppeteer's built-in Chromium
+      headless: "new", // Use new headless mode
+      args: ["--no-sandbox", "--disable-setuid-sandbox"], // Required for Render
     });
 
-    console.log("[SERVER] Puppeteer launched successfully");
-    page = await browser.newPage();
-    console.log("[SERVER] Navigating to Instagram...");
-    await page.goto("https://www.instagram.com/", {
-      waitUntil: "networkidle2",
-    });
+    const page = await browser.newPage();
+    await page.goto("https://www.instagram.com", { waitUntil: "networkidle2" });
 
-    console.log("[SERVER] Typing credentials...");
-    await page.type('[aria-label="Phone number, username, or email"]', email);
-    await page.type('[aria-label="Password"]', password);
-    console.log("[SERVER] Clicking login button...");
-    await page.click(
-      " div.x9f619.xjbqb8w.x78zum5.x168nmei.x13lgxp2.x5pf9jr.xo71vjh.xqui205.x1n2onr6.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1 > div:nth-child(3) > button"
-    );
+    console.log("Instagram page loaded successfully");
 
-    try {
-      console.log("[SERVER] Checking for incorrect credentials message...");
-      await page.waitForSelector(
-        "div.xkmlbd1.xvs91rp.xd4r4e8.x1anpbxc.x1m39q7l.xyorhqc.x540dpk.x2b8uid",
-        { timeout: 3000 }
-      );
-      console.log("[SERVER] Incorrect credentials detected.");
-      await browser.close();
-      onSuccess("Incorrect Credentials", 500);
-      return;
-    } catch (e) {
-      console.log(
-        "[SERVER] No incorrect credentials message found, proceeding..."
-      );
-    }
+    // Your Instagram login logic here...
 
-    console.log("[SERVER] Waiting for navigation after login...");
-    await page.waitForNavigation({ waitUntil: "networkidle2" });
-    console.log("[SERVER] Login successful!");
-    return { browser, page };
-  } catch (e) {
-    console.log("[ERROR]", e);
-    if (browser) {
-      console.log("[SERVER] Closing browser due to error...");
-      await browser.close();
-    }
-    return null;
+    await browser.close();
+  } catch (error) {
+    console.error("Error in instaLogin:", error);
   }
 }
+
+module.exports = { instaLogin };
 async function extractAllData(username, password, onSuccess, wsInstance, data) {
   console.log("Extracting all data");
   let loginResult;
