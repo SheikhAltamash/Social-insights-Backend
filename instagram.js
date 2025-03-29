@@ -4,6 +4,7 @@ if (process.env.NODE_ENV !== "production") {
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const path = require("path");
 const puppeteer = require("puppeteer-core");
+// const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { sleep } = require("./routes/functions/helperFunction");
 const { jsPDF } = require("jspdf");
@@ -22,8 +23,9 @@ async function instaLogin(email, password, onSuccess, wsInstance) {
   try {
     console.log("[SERVER] Launching Puppeteer...");
     browser = await puppeteer.launch({
-      executablePath:
-        process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium",
+      executablePath: "/opt/google/chrome/chrome",
+      // executablePath:
+        // process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/google-chrome",
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
