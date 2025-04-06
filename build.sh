@@ -1,14 +1,21 @@
-#!/bin/bash
-# Update package lists
-apt-get update
+#!/usr/bin/env bash
+set -o errexit  # Exit on error
 
-# Install Chromium
-apt-get install -y chromium
+# Install dependencies
+npm install
 
-# Install Puppeteer Chromium
+# Ensure Puppeteer cache directory exists
+PUPPETEER_CACHE_DIR=/opt/render/.cache/puppeteer
+mkdir -p $PUPPETEER_CACHE_DIR
+
+# Install Puppeteer and download Chrome
 npx puppeteer browsers install chrome
 
-# Set the correct executable path
-export PUPPETEER_EXECUTABLE_PATH=$(npx puppeteer browsers path chrome)
-
-echo "Chromium installed at: $PUPPETEER_EXECUTABLE_PATH"
+# Store or pull Puppeteer cache with build cache
+if [[ ! -d $PUPPETEER_CACHE_DIR ]]; then
+  echo "Copying Puppeteer Cache from Build Cache..."
+  cp -R /opt/render/project/src/.cache/puppeteer/chrome/ $PUPPETEER_CACHE_DIR
+else
+  echo "Storing Puppeteer Cache in Build Cache..."
+  cp -R $PUPPETEER_CACHE_DIR /opt/render/project/src/.cache/puppeteer/chrome/
+fi
