@@ -4,41 +4,63 @@ if (process.env.NODE_ENV !== "production") {
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const path = require("path");
 const puppeteer = require("puppeteer");
-// const puppeteer = require("puppeteer");
 const fs = require("fs");
 const { sleep } = require("./routes/functions/helperFunction");
+// let email = "test_spys";
+// let password = "sheikh@2004";
 const { jsPDF } = require("jspdf");
 const sharp = require("sharp");
 const { InstaUser } = require("./models/InstaModel.js");
 const { cloudinary } = require("./cloudinary.js");
 
-// cmd from render build command
-// npm install && npx puppeteer browsers
-
-async function instaLogin() {
+async function instaLogin(email, password, onSuccess, wsInstance) {
+  console.log("Logging in...");
+  let browser;
+  let page;
   try {
-    console.log("Launching Puppeteer...");
-
-    const browser = await puppeteer.launch({
-      executablePath: puppeteer.executablePath(), // Use Puppeteer's built-in Chromium
-      headless: "new", // Use new headless mode
-      args: ["--no-sandbox", "--disable-setuid-sandbox"], // Required for Render
+    browser = await puppeteer.launch({
+      executablePath: process.env.production
+        ? process.env.PUPPETEER_EXECUTABLE_PATH
+        : puppeteer.executablePath(),
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      
+    });
+    page = await browser.newPage();
+    await page.goto("https://www.instagram.com/", {
+      waitUntil: "networkidle2",
     });
 
-    const page = await browser.newPage();
-    await page.goto("https://www.instagram.com", { waitUntil: "networkidle2" });
+    await page.type('[aria-label="Phone number, username, or email"]', email);
+    await page.type('[aria-label="Password"]', password);
+    await page.click(
+      " div.x9f619.xjbqb8w.x78zum5.x168nmei.x13lgxp2.x5pf9jr.xo71vjh.xqui205.x1n2onr6.x1plvlek.xryxfnj.x1c4vz4f.x2lah0s.xdt5ytf.xqjyukv.x1qjc9v5.x1oa3qoh.x1nhvcw1 > div:nth-child(3) > button"
+    );
+    try {
+      await page.waitForSelector(
+        "div.xkmlbd1.xvs91rp.xd4r4e8.x1anpbxc.x1m39q7l.xyorhqc.x540dpk.x2b8uid",
+        { timeout: 3000 }
+      );
 
-    console.log("Instagram page loaded successfully");
+      console.log("Incorrect creadintials");
+      await browser.close();
+      onSuccess("Incorrect Credentials", 500);
 
-    // Your Instagram login logic here...
+      return;
+    } catch (e) {}
 
-    await browser.close();
-  } catch (error) {
-    console.error("Error in instaLogin:", error);
+    await page.waitForNavigation({ waitUntil: "networkidle2" });
+    // onSuccess("Login successful !", 200);
+    return { browser, page };
+  } catch (e) {
+    console.log(e);
+    if (browser) {
+      await browser.close();
+    }
+
+    return null;
   }
 }
-
-module.exports = { instaLogin };
 async function extractAllData(username, password, onSuccess, wsInstance, data) {
   console.log("Extracting all data");
   let loginResult;
@@ -363,6 +385,13 @@ async function scrollUpAndScreenshot(
       return chatElement !== null;
     }, chatNameSelector);
 
+    let chatNameSelectorBlocked =
+      "div.x9f619.xpkgp8e.xmns6w2.xh8yej3 > div > span > span";
+    const isChatFoundBlocked = await page.evaluate((chatNameSelectorBlocked) => {
+      const chatElement = document.querySelector(chatNameSelectorBlocked);
+      return chatElement !== null;
+    }, chatNameSelectorBlocked);
+
     // Extract text from the chat container
     // await sleep(100);
     const textContent = await page.evaluate((selector) => {
@@ -388,7 +417,7 @@ async function scrollUpAndScreenshot(
 
       scrollPosition++;
       iterationCount++;
-      if (isChatFound) {
+      if (isChatFound||isChatFoundBlocked) {
         console.log("Desired chat found and moved to the top of the chat !");
         break;
       }
@@ -401,8 +430,7 @@ async function scrollUpAndScreenshot(
     textContent.split("\n").forEach((line) => {
       const trimmedLine = line.trim();
       // Regular expression to detect time and date formats
-      const dateTimePattern =
-        /\b(?:\d{1,2}:\d{2}\s?(?:AM|PM)?)|\b(?:\w+\s\d{1,2},?\s?\d{0,4})/i;
+      const dateTimePattern =/\b(?:\d{1,2}:\d{2}\s?(?:AM|PM)?)|\b(?:\w+\s\d{1,2},?\s?\d{0,4})/i;
 
       // Skip lines that match date/time patterns
       if (
