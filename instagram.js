@@ -47,7 +47,7 @@ async function instaLogin(email, password, onSuccess, wsInstance) {
       return;
     } catch (e) {}
 
-    await page.waitForNavigation({ waitUntil: "networkidle2" });
+    await page.waitForNavigation({ waitUntil: "networkidle2" , timeout:60000});
     // onSuccess("Login successful !", 200);
     return { browser, page };
   } catch (e) {
