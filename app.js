@@ -73,3 +73,6 @@ app.post("/instagramlogin", async (req, res) => {
     data
   );
 });
+app.get("/alive", (req, res) => {
+  res.send("Server is alive");
+})
